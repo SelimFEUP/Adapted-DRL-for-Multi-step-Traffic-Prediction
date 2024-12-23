@@ -16,20 +16,19 @@ tf.random.set_seed(seed)
 # Load the dataset
 def load_data(filepath):
     data = pd.read_csv(filepath, index_col=0, parse_dates=True)
-    #data = data[:10000]
-    
-    # Handle missing values if necessary (e.g., fill forward/backward)
+       
+    # Handle missing values
     data.fillna(method='ffill', inplace=True)
     data.interpolate(method='linear', inplace=True)
     return data.values
 
-# Preprocess the data: Scaling, converting to numpy array
+# Preprocessing
 def preprocess_data(data):
     scaler = MinMaxScaler(feature_range=(0, 1))
     data_scaled = scaler.fit_transform(data)
     return data_scaled, scaler
 
-# Create windows for input-output pairs (for multi-step time series forecasting)
+# Creating windows
 def create_sequences(data, input_steps, output_steps):
     X, y = [], []
     for i in range(len(data) - input_steps - output_steps):
@@ -37,14 +36,14 @@ def create_sequences(data, input_steps, output_steps):
         y.append(data[(i + input_steps):(i + input_steps + output_steps), :])
     return np.array(X), np.array(y)
 
-# Split the data into training, validation, and testing sets
+# Spliting the data into training, validation, and testing sets
 def split_data(X, y, test_size=0.2, val_size=0.1):
     X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=test_size)
     X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=val_size/(test_size + val_size))
     return X_train, X_val, X_test, y_train, y_val, y_test
     
     
-# Novel DRL Model
+# DRL Model
 class Critic(tf.keras.Model):
     def __init__(self, input_shape):
         super(Critic, self).__init__()
@@ -64,16 +63,16 @@ class Actor_reshape(tf.keras.Model):
         self.bilstm = layers.Bidirectional(layers.LSTM(312, return_sequences=True))
         self.lstm2 = layers.LSTM(128, return_sequences=False)  # Change to return_sequences=False
         self.dense1 = layers.Dense(128, activation='relu')
-        self.dense2 = layers.Dense(steps_ahead * num_features, activation='linear')  # Adjust output size
+        self.dense2 = layers.Dense(steps_ahead * num_features, activation='linear') 
         self.reshape = layers.Reshape((steps_ahead, num_features))
 
     def call(self, inputs):
         x = self.lstm1(inputs)
         x = self.bilstm(x)
-        x = self.lstm2(x)  # Now output shape is (batch_size, 128)
+        x = self.lstm2(x) 
         x = self.dense1(x)
-        x = self.dense2(x)  # Now output shape is (batch_size, steps_ahead * num_features)
-        return self.reshape(x)  # Reshape to (batch_size, steps_ahead, num_features)
+        x = self.dense2(x) 
+        return self.reshape(x)
         
 class Actor(tf.keras.Model):
     def __init__(self, input_shape, num_features, steps_ahead):
@@ -96,7 +95,7 @@ class Actor(tf.keras.Model):
 def ces(y_true, y_pred):
     return np.sum(np.abs(y_true - y_pred))
 
-# Train the DRL-based multi-step prediction model
+# Training
 def train_drl_model(X_train, Y_train, X_val, Y_val, steps_ahead, num_features):
     input_shape = X_train.shape[1:]  # (sequence_length, num_features)
     output_shape = Y_train.shape[1]  # steps_ahead
@@ -127,7 +126,7 @@ def train_drl_model(X_train, Y_train, X_val, Y_val, steps_ahead, num_features):
         critic_optimizer.apply_gradients(zip(critic_gradients, critic.trainable_variables))
 
     # Training loop
-    epochs = 1
+    epochs = 500
     for epoch in range(epochs):
         for i in range(len(X_train)):
             train_step(X_train[i:i+1], Y_train[i:i+1])
@@ -147,8 +146,8 @@ def train_drl_model(X_train, Y_train, X_val, Y_val, steps_ahead, num_features):
         # Save the actor and critic models if the validation MAE improves
         if mae < best_val_mae:
             best_val_mae = mae
-            actor.save_weights('DRL_Traffic_pred/best_actor_model_pems_24.weights.h5')
-            critic.save_weights('DRL_Traffic_pred/best_critic_model_pems_24.weights.h5')
+            actor.save_weights('best_actor_model_pems_24.weights.h5')
+            critic.save_weights('best_critic_model_pems_24.weights.h5')
             print(f"Best models saved with Validation MAE: {best_val_mae:.4f}")
 
     return actor, critic
@@ -164,26 +163,23 @@ def validate_model(actor_model, X_val, Y_val):
     
     mae = mean_absolute_error(Y_val_flat, predictions_flat)
     rmse = np.sqrt(mean_squared_error(Y_val_flat, predictions_flat))
+       
+    print(f"Test MAE: {mae:.4f}, RMSE: {rmse:.4f}")
     
-    # Define your CES function for scoring (adjust this function as needed)
-    ces_score = ces(Y_val_flat, predictions_flat)
-    
-    print(f"Test MAE: {mae:.4f}, RMSE: {rmse:.4f}, CES_score: {ces_score:.2f}%")
-    
-    return mae, rmse, ces_score
+    return mae, rmse
 
 
-# Main pipeline
 filepath = 'transformed_data.csv'  # Update to your dataset path
 
 data = load_data(filepath)
 
 input_steps = 24
 output_steps = 24
-# Create sequences for multi-step forecasting
+
+# Create sequences for multi-step-ahead prediction
 X, y = create_sequences(data, input_steps=input_steps, output_steps=output_steps)
     
-# Split the data into training, validation, and test sets
+# Spliting the data
 X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
     
 scaler = MinMaxScaler(feature_range=(0, 1))
@@ -210,21 +206,16 @@ y_test_scaled = scaler.transform(y_test_reshaped).reshape(y_test.shape)
 
 actor_model, critic_model = train_drl_model(X_train_scaled, y_train_scaled, X_val_scaled, y_val_scaled, steps_ahead=output_steps, num_features=num_features)
 
-
-
 # Rebuild the Actor and Critic models with the same architecture
 #actor_model = Actor(input_shape=X_train_scaled.shape[1:], num_features=num_features, steps_ahead=output_steps)
 #critic_model = Critic(input_shape=X_train_scaled.shape[1:])
 
 # Load the weights into the models
-actor_model.load_weights('DRL_Traffic_pred/best_actor_model_pems_24.weights.h5')
-critic_model.load_weights('DRL_Traffic_pred/best_critic_model_pems_24.weights.h5')
+actor_model.load_weights('best_actor_model_pems_24.weights.h5')
+critic_model.load_weights('best_critic_model_pems_24.weights.h5')
 
 
 validate_model(actor_model, X_test_scaled, y_test_scaled)
-
-#plot_model(actor_model, to_file='DRL_Traffic_pred/actor_model_pems.png', show_shapes=True, show_layer_names=True)
-#plot_model(critic_model, to_file='DRL_Traffic_pred/critic_model.png', show_shapes=True, show_layer_names=True)
 
 #### Plotting the results
 
@@ -235,10 +226,6 @@ from matplotlib import rcParams
 # Disable external LaTeX, but keep math text rendering
 rcParams['text.usetex'] = False  # Use mathtext instead of full LaTeX
 rcParams['mathtext.fontset'] = 'cm'  # Use Computer Modern, the default LaTeX font
-
-# Assuming `y_test_scaled` and `X_test_scaled` have shape [samples, timesteps, sensors]
-# And `scaler` was fitted with 2D data [total_samples, sensors]
-num_features = num_features  # Number of sensors (features)
 
 # Reshape to 2D for inverse transform
 Y_test_reshaped = y_test_scaled.reshape(-1, num_features)
@@ -253,14 +240,10 @@ true_values = true_values.reshape(y_test_scaled.shape)
 predicted_values = predicted_values.reshape(y_test_scaled.shape)
 
 # Sensors to plot (update indices based on your dataset's columns)
-sensor_indices = [13, 5, 7, 11]  # Replace with specific sensor indices
+sensor_indices = [13, 5, 7, 11]  # Randomly selected
 
 # Plot for each sensor
-import matplotlib.pyplot as plt
-import numpy as np
-
-# Plot for each sensor
-annotations = ['(a)', '(b)', '(c)', '(d)']  # Annotations for each subplot
+annotations = ['(a)', '(b)', '(c)', '(d)'] 
 plt.figure(figsize=(7, 7))
 
 for i, sensor_idx in enumerate(sensor_indices):
@@ -286,15 +269,13 @@ for i, sensor_idx in enumerate(sensor_indices):
 plt.tight_layout()  # Adjust layout for better viewing
 plt.show()
 
-# Assuming sensor_indices, true_values, predicted_values, and annotations are defined
 for i, sensor_idx in enumerate(sensor_indices):
     plt.subplot(2, 2, i + 1)  # Create a 2x2 grid for plots
     # Plot True values as a line
     plt.plot(true_values[:48, 0, sensor_idx], label='True', color='b', linestyle='-')  # True values in blue
 
     # Plot Predicted values as a transparent line
-    plt.plot(predicted_values[:48, 0, sensor_idx], label='Predicted', color='r', linestyle='-', alpha=0.3)  # Set alpha for transparency
-
+    plt.plot(predicted_values[:48, 0, sensor_idx], label='Predicted', color='r', linestyle='-', alpha=0.3) 
     # Plot Predicted values with markers ('*')
     plt.plot(predicted_values[:48, 0, sensor_idx], '*', color='r')  # Predicted values as red stars
 
@@ -309,7 +290,7 @@ for i, sensor_idx in enumerate(sensor_indices):
 plt.tight_layout()  # Adjust layout for better viewing
 plt.show()
 
-# Define evaluation functions (MAE, RMSE)
+# Defining evaluation functions (MAE, RMSE)
 def evaluate_model(model, x_test, y_test):
     """
     Evaluate the model on the given test set using MAE and RMSE.
@@ -321,19 +302,12 @@ def evaluate_model(model, x_test, y_test):
     
 # Function to add noise to the dataset
 def add_noise(data, noise_level):
-    """
-    Add random noise to the data based on the specified noise level.
-    The noise level should be between 0 (no noise) and 1 (maximum noise).
-    """
     noise = np.random.normal(0, noise_level, data.shape)  # Gaussian noise
     noisy_data = data + noise
     return noisy_data
 
 # Evaluate the model on the test set with various noise levels
 def evaluate_with_noise(model, X_test, y_test, noise_levels):
-    """
-    Evaluate the model's performance at various noise levels.
-    """
     results = {}
     for noise_level in noise_levels:
         # Add noise to both input and output data
@@ -349,59 +323,13 @@ def evaluate_with_noise(model, X_test, y_test, noise_levels):
     
     return results
 
-# Example noise levels (can adjust as needed)
+# Noise levels
 noise_levels = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
 
-# Evaluate the model on the test set with various noise levels
 results = evaluate_with_noise(actor_model, X_test_scaled, y_test_scaled, noise_levels)
-
-# Optionally, plot the results
-import matplotlib.pyplot as plt
-
-# Plot the performance (MAE and RMSE) as a function of noise level
-mae_values = [results[noise]['MAE'] for noise in noise_levels]
-rmse_values = [results[noise]['RMSE'] for noise in noise_levels]
-
-plt.figure(figsize=(10, 5))
-plt.subplot(1, 2, 1)
-plt.plot(noise_levels, mae_values, marker='o', label='MAE')
-plt.xlabel('Noise Level')
-plt.ylabel('MAE')
-plt.title('Model Performance with Different Noise Levels')
-plt.grid(True)
-
-plt.subplot(1, 2, 2)
-plt.plot(noise_levels, rmse_values, marker='o', label='RMSE', color='red')
-plt.xlabel('Noise Level')
-plt.ylabel('RMSE')
-plt.title('Model Performance with Different Noise Levels')
-plt.grid(True)
-
-plt.tight_layout()
-plt.show()
-
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-from matplotlib import rcParams
-
-# Disable external LaTeX, but keep math text rendering
-rcParams['text.usetex'] = False  # Use mathtext instead of full LaTeX
-rcParams['mathtext.fontset'] = 'cm'  # Use Computer Modern, the default LaTeX font
-
-# Function to simulate sudden increase and decrease in traffic flow
-import matplotlib.pyplot as plt
-import numpy as np
 
 # Function to simulate sudden increase and decrease in traffic flow
 def simulate_traffic_changes(data, increase_idx, decrease_idx, increase_factor=3.5, decrease_factor=0.3):
-    """
-    Simulate sudden traffic flow changes (increase and decrease) at specified indices.
-    - increase_idx: Index where the traffic flow will increase
-    - decrease_idx: Index where the traffic flow will decrease
-    - increase_factor: Factor by which the traffic will increase
-    - decrease_factor: Factor by which the traffic will decrease
-    """
     data_copy = data.copy()
     
     # Simulate sudden increase (at 'increase_idx' index)
@@ -412,7 +340,7 @@ def simulate_traffic_changes(data, increase_idx, decrease_idx, increase_factor=3
     
     return data_copy
 
-# Example: Indices for increase and decrease
+# Indices for increase and decrease
 increase_idx = [55, 100, 155]  # Choose an index for the increase
 decrease_idx = [75, 185, 200]  # Choose an index for the decrease
 
@@ -425,78 +353,3 @@ mae_after, rmse_after = evaluate_model(actor_model, noisy_traffic_data, y_test_s
 
 print(f"Before Change => Test MAE: {mae_before:.4f}, Test RMSE: {rmse_before:.4f}")
 print(f"After Change => Test MAE: {mae_after:.4f}, Test RMSE: {rmse_after:.4f}")
-
-# Plotting the traffic flow before and after the sudden changes
-plt.figure(figsize=(10, 5))
-
-# Extract data for the first sensor (e.g., the first feature or sensor in X_test_scaled)
-# Assuming X_test_scaled has shape (250, 24, 325), so we select the first sensor (index 0)
-plt.plot(X_test_scaled[:250, 3, 2], label='Original Traffic Flow', color='blue')
-
-# Plot the traffic data after the sudden increase and decrease
-plt.plot(noisy_traffic_data[:250, 3, 2], label='Traffic Flow with Changes', linestyle='--', color='violet')
-
-# Highlight the sudden increase and decrease points
-plt.scatter(increase_idx, noisy_traffic_data[increase_idx, 3, 2], color='green', label='Sudden Increase', zorder=5)
-plt.scatter(decrease_idx, noisy_traffic_data[decrease_idx, 3, 2], color='orange', label='Sudden Decrease', zorder=5)
-
-# Adding labels and title
-#plt.title('Traffic Flow with Sudden Increase and Decrease')
-plt.xlabel('Time Step')
-plt.ylabel('Traffic Flow')
-plt.legend()
-plt.grid(True)
-
-# Show the plot
-plt.show()
-
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras import backend as K
-
-# Assuming Z_test_scaled is your input data with shape (450, 24, 153)
-# Z_test_scaled = ... (your test data)
-
-# Define the model (replace with your own model)
-# model = tf.keras.models.load_model('path_to_your_model')
-
-# Generate adversarial example using FGSM
-def generate_adversarial_example(model, input_data, epsilon=0.1):
-    # Ensure that the input is a tf.Variable so we can compute the gradient
-    input_data = tf.convert_to_tensor(input_data, dtype=tf.float32)
-    
-    with tf.GradientTape() as tape:
-        tape.watch(input_data)  # Watch the input data to compute the gradient
-        predictions = model(input_data)  # Forward pass
-        loss = tf.keras.losses.MeanSquaredError()(input_data, predictions)  # Compute loss
-        
-    # Compute the gradient of the loss with respect to the input data
-    gradient = tape.gradient(loss, input_data)
-    
-    # Generate the adversarial example by perturbing the input in the direction of the gradient
-    perturbation = epsilon * tf.sign(gradient)  # Fast Gradient Sign Method (FGSM)
-    
-    # Create the adversarial example by adding the perturbation
-    adversarial_example = input_data + perturbation
-    
-    return adversarial_example
-
-# Apply the adversarial attack on Z_test_scaled
-adversarial_data = generate_adversarial_example(actor_model, X_test_scaled)
-
-# Convert the adversarial data back to NumPy if needed for further processing
-adversarial_data = adversarial_data.numpy()
-
-# Now, let's evaluate the performance of the model on the original vs. adversarial data
-
-# Evaluate model on clean data
-original_performance = actor_model.evaluate(X_test_scaled, X_test_scaled)  # Assuming reconstruction task
-
-# Evaluate model on adversarial data
-adversarial_performance = actor_model.evaluate(adversarial_data, X_test_scaled)  # Assuming reconstruction task
-
-print(f"Performance on original data: {original_performance}")
-print(f"Performance on adversarial data: {adversarial_performance}")
-
-
-
