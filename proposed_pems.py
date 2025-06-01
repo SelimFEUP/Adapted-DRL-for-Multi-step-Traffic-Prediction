@@ -147,7 +147,7 @@ def validate_model(actor_model, X_val, Y_val):
     
     print(f"Test MAE: {mae:.4f}, RMSE: {rmse:.4f}%")
     
-    return mae, rmse, ces_score
+    return mae, rmse
 
 
 # Main pipeline
