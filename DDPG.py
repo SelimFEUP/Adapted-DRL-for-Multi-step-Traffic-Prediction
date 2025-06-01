@@ -141,7 +141,6 @@ class DDPG:
 
 # Training Setup
 data = pd.read_csv("transformed_data.csv")
-#data = data[:1000]
 data.fillna(method='ffill', inplace=True)
 data.interpolate(method='linear', inplace=True)
 data = data.drop(columns=["date_hour"]).values
@@ -152,7 +151,7 @@ data = scaler.fit_transform(data)
 n_steps = 24
 pred_steps = 24
 batch_size = 32
-episodes = 300
+episodes = 500
 
 state_dim = n_steps * data.shape[1]
 action_dim = pred_steps * data.shape[1]
@@ -186,11 +185,8 @@ for episode in tqdm(range(episodes)):
     print(f"Episode {episode + 1}/{episodes}, Reward: {episode_reward:.2f}")
 
 
-agent.save(actor_path="DRL_Traffic_pred/actor_model.h5",critic_path="DRL_Traffic_pred/critic_model.h5",target_actor_path="DRL_Traffic_pred/target_actor_model.h5",
-           target_critic_path="DRL_Traffic_pred/target_critic_model.h5")
-
-#agent.load(actor_path="DRL_Traffic_pred/actor_model.h5",critic_path="DRL_Traffic_pred/critic_model.h5",target_actor_path="DRL_Traffic_pred/target_actor_model.h5",
-#    target_critic_path="DRL_Traffic_pred/target_critic_model.h5")
+agent.save(actor_path="actor_model.h5",critic_path="critic_model.h5",target_actor_path="target_actor_model.h5",
+           target_critic_path="target_critic_model.h5")
 
 # Evaluation
 def evaluate_model(env, agent, scaler):
