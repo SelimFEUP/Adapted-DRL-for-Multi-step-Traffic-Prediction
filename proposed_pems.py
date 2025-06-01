@@ -62,20 +62,18 @@ class Actor(tf.keras.Model):
         super(Actor, self).__init__()
         self.lstm1 = layers.LSTM(312, return_sequences=True)
         self.bilstm = layers.Bidirectional(layers.LSTM(312, return_sequences=True))
-        self.lstm2 = layers.LSTM(128, return_sequences=False)  # Only return last output
+        self.lstm2 = layers.LSTM(128, return_sequences=True)
         self.dense1 = layers.Dense(128, activation='relu')
-        self.dense2 = layers.Dense(steps_ahead * num_features, activation='linear')
+        self.dense2 = layers.Dense(num_features, activation='linear')
         self.reshape = layers.Reshape((steps_ahead, num_features))
-        self.steps_ahead = steps_ahead
-        self.num_features = num_features
 
     def call(self, inputs):
         x = self.lstm1(inputs)
         x = self.bilstm(x)
-        x = self.lstm2(x) 
+        x = self.lstm2(x)
         x = self.dense1(x)
-        x = self.dense2(x) 
-        return self.reshape(x)  # Reshape to (batch_size, steps_ahead, num_features)
+        x = self.dense2(x)
+        return self.reshape(x)
         
 # Train the DRL-based multi-step prediction model
 def train_drl_model(X_train, Y_train, X_val, Y_val, steps_ahead, num_features):
