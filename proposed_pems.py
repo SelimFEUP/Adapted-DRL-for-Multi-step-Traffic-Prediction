@@ -145,10 +145,7 @@ def validate_model(actor_model, X_val, Y_val):
     mae = mean_absolute_error(Y_val_flat, predictions_flat)
     rmse = np.sqrt(mean_squared_error(Y_val_flat, predictions_flat))
     
-    # Define your CES function for scoring (adjust this function as needed)
-    ces_score = ces(Y_val_flat, predictions_flat)
-    
-    print(f"Test MAE: {mae:.4f}, RMSE: {rmse:.4f}, CES_score: {ces_score:.2f}%")
+    print(f"Test MAE: {mae:.4f}, RMSE: {rmse:.4f}%")
     
     return mae, rmse, ces_score
 
