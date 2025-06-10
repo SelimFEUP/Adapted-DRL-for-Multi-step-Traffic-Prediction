@@ -140,7 +140,7 @@ class DDPG:
 
 
 # Training Setup
-data = pd.read_csv("transformed_data.csv")
+data = pd.read_csv("data/transformed_data.csv")
 data.fillna(method='ffill', inplace=True)
 data.interpolate(method='linear', inplace=True)
 data = data.drop(columns=["date_hour"]).values
@@ -185,8 +185,8 @@ for episode in tqdm(range(episodes)):
     print(f"Episode {episode + 1}/{episodes}, Reward: {episode_reward:.2f}")
 
 
-agent.save(actor_path="actor_model.h5",critic_path="critic_model.h5",target_actor_path="target_actor_model.h5",
-           target_critic_path="target_critic_model.h5")
+agent.save(actor_path="models/actor_model.h5",critic_path="models/critic_model.h5",target_actor_path="models/target_actor_model.h5",
+           target_critic_path="models/target_critic_model.h5")
 
 # Evaluation
 def evaluate_model(env, agent, scaler):
