@@ -16,8 +16,7 @@ tf.random.set_seed(seed)
 # Load the dataset
 def load_data(filepath):
     data = pd.read_csv(filepath, index_col=0, parse_dates=True)
-    #data = data[:10000]
-    
+        
     # Handle missing values if necessary (e.g., fill forward/backward)
     data.fillna(method='ffill', inplace=True)
     data.interpolate(method='linear', inplace=True)
@@ -149,7 +148,7 @@ def validate_model(actor_model, X_val, Y_val):
 
 
 # Main pipeline
-filepath = 'transformed_data.csv'  # Update to your dataset path
+filepath = 'data/transformed_data.csv'  # Update to your dataset path
 
 data = load_data(filepath)
 
@@ -186,8 +185,8 @@ y_test_scaled = scaler.transform(y_test_reshaped).reshape(y_test.shape)
 actor_model, critic_model = train_drl_model(X_train_scaled, y_train_scaled, X_val_scaled, y_val_scaled, steps_ahead=output_steps, num_features=num_features)
 
 # Load the weights into the models
-actor_model.load_weights('best_actor_model_pems_24.weights.h5')
-critic_model.load_weights('best_critic_model_pems_24.weights.h5')
+actor_model.load_weights('models/best_actor_model_pems_24.weights.h5')
+critic_model.load_weights('models/best_critic_model_pems_24.weights.h5')
 
 
 validate_model(actor_model, X_test_scaled, y_test_scaled)
